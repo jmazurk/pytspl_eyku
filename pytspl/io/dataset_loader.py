@@ -11,6 +11,7 @@ from .data_loaders.transportation_loader import (
 )
 from .data_loaders.wsn_loader import load_wsn_data
 from .data_loaders.webkb_loader import _load_webkb_subset
+from .data_loaders.commute_loader import load_commuting_msoa
 
 DATASETS = {
     "paper": load_paper_data,
@@ -27,6 +28,7 @@ DATASETS = {
     ),
     "wsn": load_wsn_data,
     "scnn_paper": load_scnn_paper,
+    "commuting-msoa": load_commuting_msoa,
 }
 
 

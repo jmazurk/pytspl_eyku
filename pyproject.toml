@@ -27,7 +27,7 @@ scipy = "^1.11.4"
 trimesh = "^4.0.10"
 torch = "^2.3.1"
 torcheval = "^0.0.7"
-torchvision = "^0.18.0"
+torchvision = ">=0.18.0"
 # documentation dependencies
 sphinx = "^7.2.6"
 sphinx-autoapi = "^3.2.1"
