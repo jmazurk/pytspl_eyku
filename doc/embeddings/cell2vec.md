@@ -5,9 +5,9 @@ complex. Each cell of a chosen rank (nodes, edges, or polygons) is mapped to a
 dense vector such that cells appearing in similar structural contexts receive
 similar vectors.
 
-The API follows the design of TopoEmbedX's Cell2Vec, using PyTSPL's own
+The API follows the design of TopoEmbedX's Cell2Vec, using PyTSPL's
 simplicial and cell complex representations. The biased random walk follows
-node2vec.
+Node2Vec.
 
 The method is as follows:
 
@@ -37,23 +37,23 @@ model = Cell2Vec(
 )
 model.fit(sc, rank=1, neighborhood_type="adj")
 
-embeddings = model.get_embedding()                      # numpy array (num_edges, 128)
+embeddings = model.get_embedding()  # numpy array (num_edges, 128)
 embeddings_by_cell = model.get_embedding(as_dict=True)  # {edge: vector}
 ```
 
 ## Constructor parameters
 
-| Parameter | Meaning |
-|-----------|---------|
-| `walk_number` | Number of random walks started from each cell. |
-| `walk_length` | Number of steps in each walk. |
+| Parameter | Meaning                                                    |
+|-----------|------------------------------------------------------------|
+| `walk_number` | Number of random walks started from each cell.             |
+| `walk_length` | Number of steps in each walk.                              |
 | `p` | Return parameter. Low `p` biases the walk toward backtracking. |
-| `q` | In-out parameter. Low `q` biases the walk outward (exploration); high `q` keeps it local. |
-| `dimensions` | Length of each output embedding vector. |
-| `window_size` | Skip-gram context window size. |
-| `epochs` | Number of Word2Vec training epochs. |
-| `workers` | Worker threads. Use `workers=1` for reproducible results. |
-| `seed` | Random seed for walks and Word2Vec. |
+| `q` | In-out parameter. Low `q` biases the walk outward (exploration). |
+| `dimensions` | Length of each output embedding vector.                    |
+| `window_size` | Skip-gram context window size.                             |
+| `epochs` | Number of Word2Vec training epochs.                        |
+| `workers` | Worker threads. Use `workers=1` for reproducible results.  |
+| `seed` | Random seed for walks and Word2Vec.                        |
 
 Setting `p = q = 1` recovers an unbiased (first-order) random walk.
 

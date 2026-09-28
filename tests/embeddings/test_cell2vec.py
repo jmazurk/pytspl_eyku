@@ -86,7 +86,7 @@ def test_reproducible_with_seed(tiny_sc):
 
     assert np.allclose(e1, e2)
 
-# doesnt mutate original complex
+# doesn't mutate original complex
 
 def test_fit_does_not_modify_complex(tiny_sc):
     edges_before = list(tiny_sc.edges)
