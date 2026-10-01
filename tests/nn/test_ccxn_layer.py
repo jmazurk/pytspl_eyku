@@ -18,7 +18,7 @@ def _to_sparse(mat):
 
 @pytest.fixture
 def tiny_setup():
-    """Triangle (0,1,2) + dangling edge (2,3), with operators and features."""
+    """Triangle (0,1,2) with extra edge (2,3)"""
     sc = SimplicialComplex(
         nodes=[0, 1, 2, 3],
         edges=[(0, 1), (0, 2), (1, 2), (2, 3)],
@@ -26,14 +26,12 @@ def tiny_setup():
     )
     n_nodes, n_edges, n_faces = len(sc.nodes), len(sc.edges), len(sc.triangles)
 
-    # A_up_0 (node adjacency, no self-loops)
     B1 = np.abs(sc.B1)
     A = B1 @ B1.T
     np.fill_diagonal(A, 0.0)
     A = (A > 0).astype(float)
     adjacency_0 = _to_sparse(A)
 
-    # B2^T (edges -> faces)
     incidence_2_t = _to_sparse(sc.B2.T)
 
     return {
@@ -62,9 +60,9 @@ def test_layer_output_shapes(tiny_setup):
         x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"]
     )
 
-    assert x_0_new.shape == (s["n_nodes"], out_ch_0)   # nodes -> out_ch_0
-    assert x_1_new.shape == (s["n_edges"], out_ch_1)   # edges -> out_ch_1
-    assert x_2_new.shape == (s["n_faces"], in_ch_2)    # faces -> in_ch_2
+    assert x_0_new.shape == (s["n_nodes"], out_ch_0)
+    assert x_1_new.shape == (s["n_edges"], out_ch_1)
+    assert x_2_new.shape == (s["n_faces"], in_ch_2)
 
 def test_layer_backward(tiny_setup):
     s = tiny_setup
@@ -78,7 +76,7 @@ def test_layer_backward(tiny_setup):
         x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"]
     )
 
-    # make a scalar loss from all three outputs, then backprop
+    # make a scalar loss from all three outputs then backprop
     loss = x_0_new.sum() + x_1_new.sum() + x_2_new.sum()
     loss.backward()
 
@@ -100,18 +98,18 @@ def test_layer_deterministic(tiny_setup):
     layer1 = CCXNLayer(3, 3, 5, 8, 8)
     out1 = layer1(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"])
 
-    # build layer 2 with the SAME seed
+    # build layer 2 with the same seed
     torch.manual_seed(42)
     layer2 = CCXNLayer(3, 3, 5, 8, 8)
     out2 = layer2(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"])
 
-    # same seed + same input -> identical outputs
+    # same seed + same input =? identical outputs
     for a, b in zip(out1, out2):
         assert torch.allclose(a, b)
 
 
 def test_layer_no_faces():
-    # complex with nodes and edges but NO faces
+    # complex with nodes and edges but no faces
     sc = SimplicialComplex(
         nodes=[0, 1, 2],
         edges=[(0, 1), (1, 2)],
@@ -126,7 +124,7 @@ def test_layer_no_faces():
     A = (A > 0).astype(float)
     adjacency_0 = _to_sparse(A)
 
-    # B2 is empty -> B2^T has shape (0, n_edges)
+    # B2 is empty so B2^T has shape (0, n_edges)
     B2_t = sc.B2.T
     incidence_2_t = _to_sparse(B2_t)
 
@@ -142,23 +140,21 @@ def test_layer_no_faces():
     # nodes and edges still update normally
     assert x_0_new.shape == (n_nodes, 8)
     assert x_1_new.shape == (n_edges, 8)
-    # faces: zero of them -> empty face signal
+    # should get empty face signal
     assert x_2_new.shape == (0, 5)
 
 
 def test_layer_raises_on_bad_dims(tiny_setup):
     s = tiny_setup
-    layer = CCXNLayer(3, 3, 5, 8, 8)   # expects 3 node feats, 3 edge feats
+    layer = CCXNLayer(3, 3, 5, 8, 8)
 
     x_2 = torch.zeros(s["n_faces"], 5)
 
-    # wrong node feature size: 4 instead of 3
     x_0_bad = torch.randn(s["n_nodes"], 4)
     x_1_ok = torch.randn(s["n_edges"], 3)
     with pytest.raises(ValueError):
         layer(x_0_bad, x_1_ok, x_2, s["adjacency_0"], s["incidence_2_t"])
 
-    # wrong edge feature size: 7 instead of 3
     x_0_ok = torch.randn(s["n_nodes"], 3)
     x_1_bad = torch.randn(s["n_edges"], 7)
     with pytest.raises(ValueError):

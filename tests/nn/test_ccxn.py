@@ -39,8 +39,7 @@ def tiny_setup():
     }
 
 
-# ---------- test 1: whole-complex readout shape ----------
-
+# whole-complex readout shape
 def test_model_readout_shape(tiny_setup):
     s = tiny_setup
     model = CCXN(in_ch_0=3, in_ch_1=3, in_ch_2=5, hidden=16,
@@ -54,8 +53,7 @@ def test_model_readout_shape(tiny_setup):
     assert pred.shape == (4,)   # one prediction, num_classes=4
 
 
-# ---------- test 2: per-cell mode shapes ----------
-
+# per-cell mode shapes
 def test_model_per_cell_shapes(tiny_setup):
     s = tiny_setup
     model = CCXN(in_ch_0=3, in_ch_1=3, in_ch_2=5, hidden=16,
