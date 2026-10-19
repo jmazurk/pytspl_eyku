@@ -36,13 +36,15 @@ class CCXN(nn.Module):
 
         self.readout_linear = nn.Linear(hidden, num_classes)
 
-    def forward(self, x_0, x_1, adjacency_0, incidence_2_t, x_2=None, readout=True):
+    def forward(self, x_0, x_1, adjacency_0, incidence_2_t, down_laplacian_1, up_laplacian_1, x_2=None, readout=True):
         """
             Args:
                 x_0 (Tensor): Node features, (num_nodes, in_ch_0).
                 x_1 (Tensor): Edge features, (num_edges, in_ch_1).
                 adjacency_0 (Tensor): Sparse node adjacency A_up_0.
                 incidence_2_t (Tensor): Sparse transposed edge-to-face incidence B2^T.
+                down_laplacian_1 (Tensor): Sparse lower edge Laplacian B1^T B1.
+                up_laplacian_1 (Tensor): Sparse upper edge Laplacian B2 B2^T.
                 x_2 (Tensor, optional): Face features. Defaults to zeros.
                 readout (bool, optional): If True, return one pooled whole-complex prediction,
                 if False, return the per-cell signals. Default is True.
@@ -56,7 +58,7 @@ class CCXN(nn.Module):
             x_2 = torch.zeros(n_faces, self.layers[0].edge_to_face.linear.out_features)
 
         for layer in self.layers:
-            x_0, x_1, x_2 = layer(x_0, x_1, x_2, adjacency_0, incidence_2_t)
+            x_0, x_1, x_2 = layer(x_0, x_1, x_2, adjacency_0, incidence_2_t, down_laplacian_1, up_laplacian_1)
 
         if not readout:
             return x_0, x_1, x_2

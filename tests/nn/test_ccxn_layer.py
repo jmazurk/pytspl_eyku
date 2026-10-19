@@ -33,10 +33,14 @@ def tiny_setup():
     adjacency_0 = _to_sparse(A)
 
     incidence_2_t = _to_sparse(sc.B2.T)
+    down_laplacian_1 = _to_sparse(sc.B1.T @ sc.B1)
+    up_laplacian_1 = _to_sparse(sc.B2 @ sc.B2.T)
 
     return {
         "adjacency_0": adjacency_0,
         "incidence_2_t": incidence_2_t,
+        "down_laplacian_1": down_laplacian_1,
+        "up_laplacian_1": up_laplacian_1,
         "n_nodes": n_nodes,
         "n_edges": n_edges,
         "n_faces": n_faces,
@@ -57,7 +61,8 @@ def test_layer_output_shapes(tiny_setup):
     x_2 = torch.zeros(s["n_faces"], in_ch_2)
 
     x_0_new, x_1_new, x_2_new = layer(
-        x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"]
+        x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"],
+        s["down_laplacian_1"], s["up_laplacian_1"]
     )
 
     assert x_0_new.shape == (s["n_nodes"], out_ch_0)
@@ -73,7 +78,8 @@ def test_layer_backward(tiny_setup):
     x_2 = torch.zeros(s["n_faces"], 5)
 
     x_0_new, x_1_new, x_2_new = layer(
-        x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"]
+        x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"],
+        s["down_laplacian_1"], s["up_laplacian_1"]
     )
 
     # make a scalar loss from all three outputs then backprop
@@ -96,12 +102,14 @@ def test_layer_deterministic(tiny_setup):
     # build layer 1 with a fixed seed
     torch.manual_seed(42)
     layer1 = CCXNLayer(3, 3, 5, 8, 8)
-    out1 = layer1(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"])
+    out1 = layer1(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"],
+                  s["down_laplacian_1"], s["up_laplacian_1"])
 
     # build layer 2 with the same seed
     torch.manual_seed(42)
     layer2 = CCXNLayer(3, 3, 5, 8, 8)
-    out2 = layer2(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"])
+    out2 = layer2(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"],
+                  s["down_laplacian_1"], s["up_laplacian_1"])
 
     # same seed + same input =? identical outputs
     for a, b in zip(out1, out2):
@@ -127,6 +135,8 @@ def test_layer_no_faces():
     # B2 is empty so B2^T has shape (0, n_edges)
     B2_t = sc.B2.T
     incidence_2_t = _to_sparse(B2_t)
+    down_laplacian_1 = _to_sparse(sc.B1.T @ sc.B1)
+    up_laplacian_1 = _to_sparse(sc.B2 @ sc.B2.T)
 
     layer = CCXNLayer(3, 3, 5, 8, 8)
     x_0 = torch.randn(n_nodes, 3)
@@ -134,7 +144,8 @@ def test_layer_no_faces():
     x_2 = torch.zeros(n_faces, 5)
 
     x_0_new, x_1_new, x_2_new = layer(
-        x_0, x_1, x_2, adjacency_0, incidence_2_t
+        x_0, x_1, x_2, adjacency_0, incidence_2_t,
+        down_laplacian_1, up_laplacian_1
     )
 
     # nodes and edges still update normally
@@ -153,9 +164,48 @@ def test_layer_raises_on_bad_dims(tiny_setup):
     x_0_bad = torch.randn(s["n_nodes"], 4)
     x_1_ok = torch.randn(s["n_edges"], 3)
     with pytest.raises(ValueError):
-        layer(x_0_bad, x_1_ok, x_2, s["adjacency_0"], s["incidence_2_t"])
+        layer(x_0_bad, x_1_ok, x_2, s["adjacency_0"], s["incidence_2_t"],
+              s["down_laplacian_1"], s["up_laplacian_1"])
 
     x_0_ok = torch.randn(s["n_nodes"], 3)
     x_1_bad = torch.randn(s["n_edges"], 7)
     with pytest.raises(ValueError):
-        layer(x_0_ok, x_1_bad, x_2, s["adjacency_0"], s["incidence_2_t"])
+        layer(x_0_ok, x_1_bad, x_2, s["adjacency_0"], s["incidence_2_t"],
+              s["down_laplacian_1"], s["up_laplacian_1"])
+
+
+def test_edges_use_neighbours(tiny_setup):
+    s = tiny_setup
+    torch.manual_seed(0)
+    layer = CCXNLayer(3, 3, 5, 8, 8)
+
+    x_0 = torch.randn(s["n_nodes"], 3)
+    x_1 = torch.randn(s["n_edges"], 3)
+    x_2 = torch.zeros(s["n_faces"], 5)
+
+    _, out_a, _ = layer(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"],
+                        s["down_laplacian_1"], s["up_laplacian_1"])
+
+    x_1_changed = x_1.clone()
+    x_1_changed[3] += 10.0
+    _, out_b, _ = layer(x_0, x_1_changed, x_2, s["adjacency_0"], s["incidence_2_t"],
+                        s["down_laplacian_1"], s["up_laplacian_1"])
+
+    assert not torch.allclose(out_a[2], out_b[2])
+
+
+def test_edges_reduce_to_resize(tiny_setup):
+    s = tiny_setup
+    layer = CCXNLayer(3, 3, 5, 8, 8)
+    with torch.no_grad():
+        layer.edge_down.linear.weight.zero_()
+        layer.edge_up.linear.weight.zero_()
+
+    x_0 = torch.randn(s["n_nodes"], 3)
+    x_1 = torch.randn(s["n_edges"], 3)
+    x_2 = torch.zeros(s["n_faces"], 5)
+
+    _, x_1_new, _ = layer(x_0, x_1, x_2, s["adjacency_0"], s["incidence_2_t"],
+                          s["down_laplacian_1"], s["up_laplacian_1"])
+
+    assert torch.allclose(x_1_new, torch.relu(layer.edge_self(x_1)))

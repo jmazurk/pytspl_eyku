@@ -29,10 +29,14 @@ def tiny_setup():
     A = (A > 0).astype(float)
     adjacency_0 = _to_sparse(A)
     incidence_2_t = _to_sparse(sc.B2.T)
+    down_laplacian_1 = _to_sparse(sc.B1.T @ sc.B1)
+    up_laplacian_1 = _to_sparse(sc.B2 @ sc.B2.T)
 
     return {
         "adjacency_0": adjacency_0,
         "incidence_2_t": incidence_2_t,
+        "down_laplacian_1": down_laplacian_1,
+        "up_laplacian_1": up_laplacian_1,
         "n_nodes": n_nodes,
         "n_edges": n_edges,
         "n_faces": n_faces,
@@ -48,7 +52,8 @@ def test_model_readout_shape(tiny_setup):
     x_0 = torch.randn(s["n_nodes"], 3)
     x_1 = torch.randn(s["n_edges"], 3)
 
-    pred = model(x_0, x_1, s["adjacency_0"], s["incidence_2_t"], readout=True)
+    pred = model(x_0, x_1, s["adjacency_0"], s["incidence_2_t"],
+                 s["down_laplacian_1"], s["up_laplacian_1"], readout=True)
 
     assert pred.shape == (4,)   # one prediction, num_classes=4
 
@@ -63,7 +68,8 @@ def test_model_per_cell_shapes(tiny_setup):
     x_1 = torch.randn(s["n_edges"], 3)
 
     x_0_out, x_1_out, x_2_out = model(
-        x_0, x_1, s["adjacency_0"], s["incidence_2_t"], readout=False
+        x_0, x_1, s["adjacency_0"], s["incidence_2_t"],
+        s["down_laplacian_1"], s["up_laplacian_1"], readout=False
     )
 
     assert x_0_out.shape == (s["n_nodes"], 16)   # nodes at hidden size
@@ -79,7 +85,8 @@ def test_model_backward(tiny_setup):
     x_0 = torch.randn(s["n_nodes"], 3)
     x_1 = torch.randn(s["n_edges"], 3)
 
-    x_0_out, x_1_out, x_2_out = model(x_0, x_1, s["adjacency_0"], s["incidence_2_t"], readout=False)
+    x_0_out, x_1_out, x_2_out = model(x_0, x_1, s["adjacency_0"], s["incidence_2_t"],
+                                      s["down_laplacian_1"], s["up_laplacian_1"], readout=False)
 
     loss = x_0_out.sum() + x_1_out.sum() + x_2_out.sum()
     loss.backward()

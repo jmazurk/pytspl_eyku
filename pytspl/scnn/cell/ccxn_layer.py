@@ -9,11 +9,13 @@ class CCXNLayer(nn.Module):
         super().__init__()
         self.node_to_node = CCXNConv(in_ch_0, out_ch_0)
         self.node_self = nn.Linear(in_ch_0, out_ch_0, bias=False)
-        self.edge_resize = nn.Linear(in_ch_1, out_ch_1, bias=False)
+        self.edge_down = CCXNConv(in_ch_1, out_ch_1)
+        self.edge_up = CCXNConv(in_ch_1, out_ch_1)
+        self.edge_self = nn.Linear(in_ch_1, out_ch_1, bias=False)
         self.edge_to_face = CCXNConv(out_ch_1, in_ch_2)
         self.activation = nn.ReLU()
 
-    def forward(self, x_0, x_1, x_2, adjacency_0, incidence_2_t):
+    def forward(self, x_0, x_1, x_2, adjacency_0, incidence_2_t, down_laplacian_1, up_laplacian_1):
         """
         Args:
             x_0 (Tensor): Node features, (num_nodes, in_ch_0).
@@ -21,6 +23,8 @@ class CCXNLayer(nn.Module):
             x_2 (Tensor): Face features, (num_faces, in_ch_2).
             adjacency_0 (Tensor): Sparse node adjacency A_up_0.
             incidence_2_t (Tensor): Sparse transposed edge to face incidence B2^T.
+            down_laplacian_1 (Tensor): Sparse lower edge Laplacian B1^T B1.
+            up_laplacian_1 (Tensor): Sparse upper edge Laplacian B2 B2^T.
 
         Returns:
             tuple: Updated (x_0, x_1, x_2).
@@ -33,18 +37,18 @@ class CCXNLayer(nn.Module):
                 f"x_0 has {x_0.shape[1]} features, "
                 f"expected {self.node_to_node.linear.in_features}"
             )
-        if x_1.shape[1] != self.edge_resize.in_features:
+        if x_1.shape[1] != self.edge_self.in_features:
             raise ValueError(
                 f"x_1 has {x_1.shape[1]} features, "
-                f"expected {self.edge_resize.in_features}"
+                f"expected {self.edge_self.in_features}"
             )
 
         # nodes mix with neighbours and add own features
         x_0_new = self.node_to_node(x_0, adjacency_0) + self.node_self(x_0)
         x_0_new = self.activation(x_0_new)
 
-        # edges resize to the hidden space
-        x_1_new = self.edge_resize(x_1)
+        # edges mix with lower and upper neighbours and add own features
+        x_1_new = (self.edge_down(x_1, down_laplacian_1) + self.edge_up(x_1, up_laplacian_1) + self.edge_self(x_1))
         x_1_new = self.activation(x_1_new)
 
         # faces add contribution from bordering edges
